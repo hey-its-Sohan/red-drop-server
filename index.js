@@ -59,11 +59,31 @@ async function run() {
     const redDropCollection = client.db('redDropDB').collection('redDrop')
     const redDropUsers = client.db('redDropDB').collection('users')
 
+    // get user profile details
+    app.get('/user-data/:email', verifyToken, async (req, res) => {
+      const requestedEmail = req.params.email;
+      const query = { email: requestedEmail }
+      const result = await redDropUsers.findOne(query)
+      res.send(result)
+    })
+
     // post users to Database
     app.post('/users', async (req, res) => {
       const userData = req.body
       const result = await redDropUsers.insertOne(userData)
       res.send(result)
+    })
+
+    // update user data
+    app.patch('/update-user-data/:email', verifyToken, async (req, res) => {
+      const requestedEmail = req.params.email
+      const updateData = req.body;
+      const result = await redDropUsers.updateOne(
+        { email: requestedEmail },
+        { $set: updateData }
+      );
+      res.send(result)
+
     })
 
     // Send a ping to confirm a successful connection
@@ -79,7 +99,7 @@ run().catch(console.dir);
 
 
 app.get('/', (req, res) => {
-  res.send('Get Ready To Share Bite!')
+  res.send('Donate Your Red Drop!')
 })
 
 app.listen(port, () => {
