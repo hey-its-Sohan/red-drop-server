@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 const port = process.env.PORT || 3000;
+const serviceAccount = require('./red-drop-firebase-adminsdk.json')
 
 app.use(cors());
 app.use(express.json());
@@ -21,10 +22,42 @@ const client = new MongoClient(uri, {
   }
 });
 
+// Firebase admin SDK
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount)
+});
+
+// verifyToken.js
+
+
+const verifyToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'Unauthorized: No token provided' });
+  }
+
+  const idToken = authHeader.split('Bearer ')[1];
+
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    req.user = decodedToken; // you now have uid, email, etc.
+    next();
+  } catch (error) {
+    console.error('Token verification failed:', error);
+    res.status(403).json({ message: 'Forbidden: Invalid token' });
+  }
+};
+
+
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
+
+    const redDropCollection = client.db('redDropDB').collection('redDrop')
+    const redDropUsers = client.db('redDropDB').collection('users')
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
