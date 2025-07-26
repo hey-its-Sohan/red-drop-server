@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 const port = process.env.PORT || 3000;
+const admin = require("firebase-admin");
 const serviceAccount = require('./red-drop-firebase-adminsdk.json')
 
 app.use(cors());
@@ -57,6 +58,13 @@ async function run() {
 
     const redDropCollection = client.db('redDropDB').collection('redDrop')
     const redDropUsers = client.db('redDropDB').collection('users')
+
+    // post users to Database
+    app.post('/users', async (req, res) => {
+      const userData = req.body
+      const result = await redDropUsers.insertOne(userData)
+      res.send(result)
+    })
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
