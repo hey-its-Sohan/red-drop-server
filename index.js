@@ -28,7 +28,7 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
 
-// verifyToken.js
+// verifyToken: to verify the access token
 
 
 const verifyToken = async (req, res, next) => {
@@ -49,6 +49,33 @@ const verifyToken = async (req, res, next) => {
     res.status(403).json({ message: 'Forbidden: Invalid token' });
   }
 };
+
+// verifyAdmin: to verify if user is admin or not
+const verifyAdmin = async (req, res, next) => {
+  try {
+    const email = req.user?.email;
+    if (!email) {
+      return res.status(401).send({ error: 'Unauthorized' });
+    }
+
+    const user = await redDropUsers.findOne({ email });
+
+    if (!user) {
+      return res.status(404).send({ error: 'User not found' });
+    }
+
+    if (user.role !== 'admin') {
+      return res.status(403).send({ error: 'Forbidden: Admins only' });
+    }
+
+    next();
+  } catch (error) {
+    console.error("verifyAdmin error:", error);
+    res.status(500).send({ error: 'Internal server error' });
+  }
+};
+
+
 
 
 async function run() {
