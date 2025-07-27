@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const express = require('express');
 const cors = require('cors');
 const app = express();
@@ -58,12 +58,37 @@ async function run() {
 
     const redDropCollection = client.db('redDropDB').collection('redDrop')
     const redDropUsers = client.db('redDropDB').collection('users')
+    const donationRequestCollection = client.db('redDropDB').collection('donationRequests')
 
     // get user profile details
     app.get('/user-data/:email', verifyToken, async (req, res) => {
       const requestedEmail = req.params.email;
       const query = { email: requestedEmail }
       const result = await redDropUsers.findOne(query)
+      res.send(result)
+    })
+
+    // get user status API
+    app.get('/user-status/:email', verifyToken, async (req, res) => {
+      const email = req.params.email;
+      const user = await redDropUsers.findOne({ email });
+      if (!user) return res.status(404).send({ message: 'User not found' });
+
+      res.send({ status: user.status });
+    });
+
+    // get user role
+    app.get('/users/role/:email', async (req, res) => {
+      const email = req.params.email;
+      const user = await redDropUsers.findOne({ email });
+      if (!user) return res.status(404).send({ role: null });
+      res.send({ role: user.role });
+    });
+
+    // get my donation requests API
+    app.get('/my-donation-requests/:email', verifyToken, async (req, res) => {
+      const requestedEmail = req.params.email
+      const result = await donationRequestCollection.find({ requesterEmail: requestedEmail }).toArray()
       res.send(result)
     })
 
@@ -74,12 +99,20 @@ async function run() {
       res.send(result)
     })
 
+    // post donation requests
+    app.post('/donation-requests', verifyToken, async (req, res) => {
+      const donationData = req.body;
+      const result = await donationRequestCollection.insertOne(donationData);
+      res.send(result);
+    });
+
     // update user data
-    app.patch('/update-user-data/:email', verifyToken, async (req, res) => {
-      const requestedEmail = req.params.email
+    app.patch('/update-user-data/:id', verifyToken, async (req, res) => {
+      const requestedId = req.params.id
       const updateData = req.body;
+
       const result = await redDropUsers.updateOne(
-        { email: requestedEmail },
+        { _id: new ObjectId(requestedId) },
         { $set: updateData }
       );
       res.send(result)
@@ -103,5 +136,5 @@ app.get('/', (req, res) => {
 })
 
 app.listen(port, () => {
-  console.log(`Share Bite is running on port: ${port}`)
+  console.log(`RedDrop is running on port: ${port}`)
 })
