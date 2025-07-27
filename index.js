@@ -62,6 +62,7 @@ async function run() {
     const redDropCollection = client.db('redDropDB').collection('redDrop')
     const redDropUsers = client.db('redDropDB').collection('users')
     const donationRequestCollection = client.db('redDropDB').collection('donationRequests')
+    const blogCollection = client.db('redDropDB').collection('blogCollections')
 
     // verifyAdmin: to verify if user is admin or not
     const verifyAdmin = async (req, res, next) => {
@@ -138,6 +139,12 @@ async function run() {
       })
     })
 
+    //  get all blood requests for admin
+    app.get('/all-donation-requests', verifyToken, verifyAdmin, async (req, res) => {
+      const result = await donationRequestCollection.find().toArray();
+      res.send(result);
+    });
+
     // post users to Database
     app.post('/users', async (req, res) => {
       const userData = req.body
@@ -151,6 +158,13 @@ async function run() {
       const result = await donationRequestCollection.insertOne(donationData);
       res.send(result);
     });
+
+    // post blog API
+    app.post('/blogs', verifyToken, verifyAdmin, async (req, res) => {
+      const blogData = req.body
+      const result = await blogCollection.insertOne(blogData)
+      res.send(result)
+    })
 
     // update user data
     app.patch('/update-user-data/:id', verifyToken, async (req, res) => {
