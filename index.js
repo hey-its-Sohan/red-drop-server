@@ -145,6 +145,21 @@ async function run() {
       res.send(result);
     });
 
+    // GET all blogs for admin
+    app.get('/blogs', verifyToken, verifyAdmin, async (req, res) => {
+      const blogs = await blogCollection.find().toArray();
+      res.send(blogs);
+    });
+
+    // get blog details
+    app.get('/blogs-details/:id', async (req, res) => {
+      const blogId = req.params.id;
+      const result = await blogCollection.findOne({ _id: new ObjectId(blogId) })
+      res.send(result);
+    });
+
+
+
     // post users to Database
     app.post('/users', async (req, res) => {
       const userData = req.body
@@ -167,7 +182,7 @@ async function run() {
     })
 
     // update user data
-    app.patch('/update-user-data/:id', verifyToken, async (req, res) => {
+    app.patch('/update-user-data/:id', verifyToken, verifyAdmin, async (req, res) => {
       const requestedId = req.params.id
       const updateData = req.body;
 
@@ -180,7 +195,7 @@ async function run() {
     })
 
     // Update status
-    app.patch('/users/status/:id', async (req, res) => {
+    app.patch('/users/status/:id', verifyToken, verifyAdmin, async (req, res) => {
       const { id } = req.params;
       const { status } = req.body;
       const result = await redDropUsers.updateOne({ _id: new ObjectId(id) }, { $set: { status } });
@@ -188,12 +203,45 @@ async function run() {
     });
 
     // Update role
-    app.patch('/users/role/:id', async (req, res) => {
+    app.patch('/users/role/:id', verifyToken, verifyAdmin, async (req, res) => {
       const { id } = req.params;
       const { role } = req.body;
       const result = await redDropUsers.updateOne({ _id: new ObjectId(id) }, { $set: { role } });
       res.send(result);
     });
+
+    // PATCH publish blog : admin
+    app.patch('/blogs/publish/:id', verifyToken, verifyAdmin, async (req, res) => {
+      const id = req.params.id;
+      const result = await blogCollection.updateOne({ _id: new ObjectId(id) }, { $set: { status: 'Published' } });
+      res.send(result);
+    });
+
+    // PATCH unpublish blog : admin
+    app.patch('/blogs/unpublish/:id', verifyToken, verifyAdmin, async (req, res) => {
+      const id = req.params.id;
+      const result = await blogCollection.updateOne({ _id: new ObjectId(id) }, { $set: { status: 'Draft' } });
+      res.send(result);
+    });
+
+    // Edit Blog Api
+    app.put('/edit-blogs/:id', verifyToken, verifyAdmin, async (req, res) => {
+      const blogId = req.params.id;
+      const updatedBlog = req.body;
+      const result = await blogCollection.updateOne(
+        { _id: new ObjectId(blogId) },
+        { $set: updatedBlog }
+      );
+      res.send(result);
+    });
+
+    // delete blog
+    app.delete('/blogs/:id', verifyToken, verifyAdmin, async (req, res) => {
+      const blogId = req.params.id;
+      const result = await blogCollection.deleteOne({ _id: new ObjectId(blogId) });
+      res.send(result);
+    });
+
 
 
     // Send a ping to confirm a successful connection
