@@ -165,6 +165,23 @@ async function run() {
 
     })
 
+    // Update status
+    app.patch('/users/status/:id', async (req, res) => {
+      const { id } = req.params;
+      const { status } = req.body;
+      const result = await redDropUsers.updateOne({ _id: new ObjectId(id) }, { $set: { status } });
+      res.send(result);
+    });
+
+    // Update role
+    app.patch('/users/role/:id', async (req, res) => {
+      const { id } = req.params;
+      const { role } = req.body;
+      const result = await redDropUsers.updateOne({ _id: new ObjectId(id) }, { $set: { role } });
+      res.send(result);
+    });
+
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
