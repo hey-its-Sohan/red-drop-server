@@ -50,30 +50,6 @@ const verifyToken = async (req, res, next) => {
   }
 };
 
-// verifyAdmin: to verify if user is admin or not
-const verifyAdmin = async (req, res, next) => {
-  try {
-    const email = req.user?.email;
-    if (!email) {
-      return res.status(401).send({ error: 'Unauthorized' });
-    }
-
-    const user = await redDropUsers.findOne({ email });
-
-    if (!user) {
-      return res.status(404).send({ error: 'User not found' });
-    }
-
-    if (user.role !== 'admin') {
-      return res.status(403).send({ error: 'Forbidden: Admins only' });
-    }
-
-    next();
-  } catch (error) {
-    console.error("verifyAdmin error:", error);
-    res.status(500).send({ error: 'Internal server error' });
-  }
-};
 
 
 
@@ -86,6 +62,38 @@ async function run() {
     const redDropCollection = client.db('redDropDB').collection('redDrop')
     const redDropUsers = client.db('redDropDB').collection('users')
     const donationRequestCollection = client.db('redDropDB').collection('donationRequests')
+
+    // verifyAdmin: to verify if user is admin or not
+    const verifyAdmin = async (req, res, next) => {
+      try {
+        const email = req.user?.email;
+        if (!email) {
+          return res.status(401).send({ error: 'Unauthorized' });
+        }
+
+        const user = await redDropUsers.findOne({ email });
+
+        if (!user) {
+          return res.status(404).send({ error: 'User not found' });
+        }
+
+        if (user.role !== 'admin') {
+          return res.status(403).send({ error: 'Forbidden: Admins only' });
+        }
+
+        next();
+      } catch (error) {
+        console.error("verifyAdmin error:", error);
+        res.status(500).send({ error: 'Internal server error' });
+      }
+    };
+
+    // get all users
+    app.get('/users', verifyToken, verifyAdmin, async (req, res) => {
+      const result = await redDropUsers.find().toArray()
+      res.send(result)
+    })
+
 
     // get user profile details
     app.get('/user-data/:email', verifyToken, async (req, res) => {
@@ -117,6 +125,17 @@ async function run() {
       const requestedEmail = req.params.email
       const result = await donationRequestCollection.find({ requesterEmail: requestedEmail }).toArray()
       res.send(result)
+    })
+
+    // get stats data for admin
+    app.get('/dashboard-stats', verifyToken, verifyAdmin, async (req, res) => {
+      const usersCount = await redDropUsers.estimatedDocumentCount();
+      const requestsCount = await donationRequestCollection.estimatedDocumentCount();
+      // total fund
+      res.send({
+        users: usersCount,
+        requests: requestsCount
+      })
     })
 
     // post users to Database
