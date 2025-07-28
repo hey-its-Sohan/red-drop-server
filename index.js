@@ -51,9 +51,6 @@ const verifyToken = async (req, res, next) => {
 };
 
 
-
-
-
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
@@ -88,6 +85,34 @@ async function run() {
         res.status(500).send({ error: 'Internal server error' });
       }
     };
+
+    // Verify Volunteer middleware
+    const verifyAdminOrVolunteer = async (req, res, next) => {
+      try {
+        const email = req.user?.email;
+        if (!email) {
+          return res.status(401).send({ error: 'Unauthorized' });
+        }
+
+        const user = await redDropUsers.findOne({ email });
+
+        if (!user) {
+          return res.status(404).send({ error: 'User not found' });
+        }
+
+        if (user.role === 'admin' || user.role === 'volunteer') {
+          return next();
+        }
+
+        return res.status(403).send({ error: 'Forbidden: Admins or Volunteers only' });
+
+      } catch (error) {
+        console.error('verifyAdminOrVolunteer error:', error);
+        return res.status(500).send({ error: 'Internal server error' });
+      }
+    };
+
+
 
     // get all users
     app.get('/users', verifyToken, verifyAdmin, async (req, res) => {
@@ -128,8 +153,8 @@ async function run() {
       res.send(result)
     })
 
-    // get stats data for admin
-    app.get('/dashboard-stats', verifyToken, verifyAdmin, async (req, res) => {
+    // get stats data for admin and volunteer
+    app.get('/dashboard-stats', verifyToken, verifyAdminOrVolunteer, async (req, res) => {
       const usersCount = await redDropUsers.estimatedDocumentCount();
       const requestsCount = await donationRequestCollection.estimatedDocumentCount();
       // total fund
@@ -139,17 +164,20 @@ async function run() {
       })
     })
 
+
     //  get all blood requests for admin
-    app.get('/all-donation-requests', verifyToken, verifyAdmin, async (req, res) => {
+    app.get('/all-donation-requests', verifyToken, verifyAdminOrVolunteer, async (req, res) => {
       const result = await donationRequestCollection.find().toArray();
       res.send(result);
     });
 
+
     // GET all blogs for admin
-    app.get('/blogs', verifyToken, verifyAdmin, async (req, res) => {
+    app.get('/blogs', verifyToken, verifyAdminOrVolunteer, async (req, res) => {
       const blogs = await blogCollection.find().toArray();
       res.send(blogs);
     });
+
 
     // get blog details
     app.get('/blogs-details/:id', async (req, res) => {
@@ -158,6 +186,20 @@ async function run() {
       res.send(result);
     });
 
+    // get public blood donation request
+    app.get('/blood-donation-requests', async (req, res) => {
+      const result = await donationRequestCollection.find({ status: 'Pending' })
+        .sort({ donationDate: 1 })
+        .toArray();
+      res.send(result);
+    });
+
+    // get donation request details
+    app.get('/donation-requests/:id', verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const request = await donationRequestCollection.findOne({ _id: new ObjectId(id) });
+      res.send(request);
+    });
 
 
     // post users to Database
@@ -235,12 +277,36 @@ async function run() {
       res.send(result);
     });
 
+    // Update donation request status
+    app.patch('/donation-requests/:id', verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const { status, donorName, donorEmail } = req.body;
+      const updateFields = { status: status || 'Pending' };
+
+      if (donorName) updateFields.donorName = donorName;
+      if (donorEmail) updateFields.donorEmail = donorEmail;
+      const updatedDoc = {
+        $set: updateFields
+      };
+      const result = await donationRequestCollection.updateOne({ _id: new ObjectId(id) }, updatedDoc);
+      res.send(result);
+    });
+
+
     // delete blog
     app.delete('/blogs/:id', verifyToken, verifyAdmin, async (req, res) => {
       const blogId = req.params.id;
       const result = await blogCollection.deleteOne({ _id: new ObjectId(blogId) });
       res.send(result);
     });
+
+    // delete donation request
+    app.delete('/donation-requests/:id', verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const result = await donationRequestCollection.deleteOne({ _id: new ObjectId(id) });
+      res.send(result);
+    });
+
 
 
 
