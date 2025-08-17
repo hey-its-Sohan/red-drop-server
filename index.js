@@ -6,6 +6,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 const admin = require("firebase-admin");
 const serviceAccount = require('./red-drop-firebase-adminsdk.json')
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 app.use(cors());
 app.use(express.json());
@@ -54,12 +55,13 @@ const verifyToken = async (req, res, next) => {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
 
-    const redDropCollection = client.db('redDropDB').collection('redDrop')
+
     const redDropUsers = client.db('redDropDB').collection('users')
     const donationRequestCollection = client.db('redDropDB').collection('donationRequests')
     const blogCollection = client.db('redDropDB').collection('blogCollections')
+    const fundCollection = client.db('redDropDB').collection('funds')
 
     // verifyAdmin: to verify if user is admin or not
     const verifyAdmin = async (req, res, next) => {
@@ -158,9 +160,21 @@ async function run() {
       const usersCount = await redDropUsers.estimatedDocumentCount();
       const requestsCount = await donationRequestCollection.estimatedDocumentCount();
       // total fund
+      const fundResult = await fundCollection.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalFund: { $sum: "$amount" }
+          }
+        }
+      ]).toArray();
+
+      const totalFund = fundResult[0]?.totalFund || 0;
+
       res.send({
         users: usersCount,
-        requests: requestsCount
+        requests: requestsCount,
+        totalFund: totalFund
       })
     })
 
@@ -195,10 +209,56 @@ async function run() {
     });
 
     // get donation request details
-    app.get('/donation-requests/:id', verifyToken, async (req, res) => {
+    app.get('/donation-requests/:id', async (req, res) => {
       const id = req.params.id;
       const request = await donationRequestCollection.findOne({ _id: new ObjectId(id) });
       res.send(request);
+    });
+
+    // get published blog for public blog page
+    app.get('/blog-page', async (req, res) => {
+      const query = { status: 'Published' }
+      const result = await blogCollection.find(query).toArray()
+      res.send(result)
+    })
+
+    // get blog details
+    app.get('/blog-details/:id', async (req, res) => {
+      const id = req.params.id
+      const blogDetails = await blogCollection.findOne({ _id: new ObjectId(id) })
+      res.send(blogDetails)
+    })
+
+    // get donor from public search
+    app.get('/search-donors', async (req, res) => {
+      const { bloodGroup, district, upazila } = req.query;
+      query = {
+        bloodGroup: bloodGroup,
+        district: district,
+        upazila: upazila,
+        status: 'active'
+      }
+      const result = await redDropUsers.find(query).toArray();
+      res.send(result);
+
+    });
+
+    // get funds API
+    app.get('/funds', verifyToken, async (req, res) => {
+      const page = parseInt(req.query.page) || 1; // defaults to 1 if no page
+      const limit = 10;
+      const skip = (page - 1) * limit;
+
+      const totalFunds = await fundCollection.countDocuments();
+      const totalPages = Math.ceil(totalFunds / limit);
+      const funds = await fundCollection
+        .find()
+        .skip(skip)
+        .limit(limit)
+        .toArray();
+
+      res.send({ funds, totalPages });
+
     });
 
 
@@ -222,6 +282,35 @@ async function run() {
       const result = await blogCollection.insertOne(blogData)
       res.send(result)
     })
+
+    // Post Payment Intent
+    app.post('/create-payment-intent', verifyToken, async (req, res) => {
+      const { amount } = req.body;
+      if (!amount) return res.status(400).send({ message: "Amount required" });
+
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: parseInt(amount) * 100, // convert to cents
+        currency: 'usd',
+        payment_method_types: ['card']
+      });
+
+      res.send({ clientSecret: paymentIntent.client_secret });
+    });
+
+    // post fund to DB
+    app.post('/funds', verifyToken, async (req, res) => {
+      const fund = req.body;
+
+      if (!fund || !fund.amount || !fund.userName || !fund.date) {
+        return res.status(400).send({ message: 'Missing fund fields' });
+      }
+
+      fund.amount = parseInt(fund.amount, 10);
+
+      const result = await fundCollection.insertOne(fund);
+      res.send(result);
+    });
+
 
     // update user data
     app.patch('/update-user-data/:id', verifyToken, verifyAdmin, async (req, res) => {
@@ -311,8 +400,8 @@ async function run() {
 
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
